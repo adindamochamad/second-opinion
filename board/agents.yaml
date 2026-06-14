@@ -1,0 +1,45 @@
+# Framework + model per agent. Each agent runs in its own process and connects
+# to the same Band room, so they can genuinely be different frameworks AND
+# different providers. That cross-provider independence is the point: the
+# Safety Verifier must NOT be the same brain as the Clinical Reviewer.
+#
+# Default cast (cross-provider):
+#   Clinical Reviewer            -> Anthropic (Claude)        [ANTHROPIC_API_KEY]
+#   Safety Verifier              -> Featherless (open model)  [FEATHERLESS_API_KEY]
+#   Regulatory & Compliance      -> AI/ML API                 [AIMLAPI_KEY]
+#
+# Any key beyond framework/model/provider/base_url/api_key_env is forwarded
+# straight to the adapter constructor (temperature, reasoning_effort, ...).
+#
+# ── Flip any agent to something you already have (one-line swaps) ──────────
+#   # Claude subscription (no API key):   framework: claude_sdk
+#   #                                     model: claude-sonnet-4-5-20250929
+#   # Codex subscription (run codex login): framework: codex
+#   #                                       model: gpt-5.4-mini
+#   # Plain OpenAI:                        framework: pydantic_ai
+#   #                                       model: gpt-5.4-mini   (needs OPENAI_API_KEY)
+#   # Local model (Ollama/vLLM):           framework: langgraph
+#   #                                       provider: openai
+#   #                                       model: llama3.1:8b
+#   #                                       base_url: http://localhost:11434/v1
+#   #                                       api_key_env: OPENAI_API_KEY
+
+clinical_reviewer:
+  framework: anthropic
+  model: claude-sonnet-4-5
+
+# Independent challenger. Uses Groq (free tier, OpenAI-compatible) so the
+# Verifier runs on a genuinely different provider and model from Clinical Reviewer.
+safety_verifier:
+  framework: claude_sdk
+  model: claude-sonnet-4-5
+
+# Compliance gate runs on Claude for reliability and strict turn discipline (the
+# open-model langgraph path occasionally returned empty generations and looped
+# here). The AI/ML API hackathon coupon ($10 via lablab) arrived with no balance
+# (403 OutOfFundsException); restore that partner provider once funded by setting
+# framework: langgraph / provider: openai / model: gpt-4o-mini /
+# base_url: https://api.aimlapi.com/v1 / api_key_env: AIMLAPI_KEY.
+regulatory_compliance:
+  framework: anthropic
+  model: claude-sonnet-4-5

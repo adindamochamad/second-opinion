@@ -1,0 +1,16 @@
+# secrets
+.env
+agent_config.yaml
+agent_config.*.yaml
+.agent_ids.txt
+.agent_ids.*.txt
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# os
+.DS_Store

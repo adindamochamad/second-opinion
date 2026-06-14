@@ -1,0 +1,5 @@
+thenvoi-sdk[langgraph,anthropic,pydantic_ai,claude_sdk,codex,gemini,google_adk]
+langchain-openai
+langchain-anthropic
+python-dotenv
+anthropic
