@@ -16,16 +16,19 @@ lablab submission checklist.
 challenger — on a *different* model from a *different* provider — must re-derive the
 pharmacology and try to break every recommendation before it reaches a human.
 
-**Elevator (30s):** Hand a single AI an FDA recall and it reads the headline —
-"subpotent lot, low impact, continue" — and misses that the recalled drug
-silently raises bleeding risk in the anticoagulated patients on the formulary.
-There was nobody in the room to say *wait*. Second Opinion puts that someone in
-the room. Three specialist agents — Clinical, an independent Verifier on a
-different model, and Regulatory — collaborate **through Band**: shared room,
-`@mention` handoffs, private reasoning channel, and a human as the escalation
-target. The Verifier is structurally forbidden from rubber-stamping; it has to
-show its own pharmacology re-derivation. We prove it both ways: it catches the
-hidden interaction on the hazardous case, and it stands down on a benign one.
+**Elevator (30s):** A capable AI can triage an FDA recall and even reach the right
+call — but in a regulated workflow that is not enough. It answers in unsourced
+prose, with no independent check, no escalation rule, and no audit trail a human
+can sign. Second Opinion puts accountability in the room. Three specialist agents
+— Clinical, an independent Verifier, and Regulatory — are driven by a Review
+Coordinator **through Band**: shared room, `@mention` handoffs, a private
+reasoning channel, verdict tokens that branch the workflow *in code*, and a human
+as the escalation target. The Verifier is structurally forbidden from
+rubber-stamping; it must show its own sourced pharmacology re-derivation, and on a
+live run it made the lead correct its own error. We show it both ways: it
+escalates a genuine hidden interaction (clarithromycin → CYP3A4 inhibition →
+simvastatin/lovastatin accumulation → rhabdomyolysis) with every claim sourced,
+and it stands down — bypassing Regulatory in code — on a benign one.
 
 ---
 
@@ -51,17 +54,19 @@ context, role specialization, task state, coordination — and a clear demo.
 Use a human voice. Show the terminal and the Band web UI. Times are cumulative.
 
 **[0:00–0:30] The hook — say it over a black slide or the room UI.**
-> "An FDA recall lands on a hospital's desk. A single AI triages it, reads the
-> headline — a subpotent lot, low impact — and says: continue, no action. It just
-> missed that this drug quietly drives major-bleed risk in the patients already on
-> blood thinners. Nobody in the room said *wait*. This is what happens when every
-> agent trusts the last one's output. We built the someone who says *wait*."
+> "An FDA recall lands on a hospital's desk. A single AI can even triage it
+> correctly — but it answers in one confident paragraph: no sources, no
+> independent check, no audit trail, nobody to catch it when it's wrong. In a
+> regulated workflow, 'right but unaccountable' fails the audit. We built the
+> accountability: an independent challenger that re-derives the pharmacology,
+> sources every claim, and escalates on the record — through Band."
 
 **[0:30–1:10] The naive baseline — screen-record `python demo.py`, left panel.**
-> "Same signal, one pass, no second opinion. Watch — it anchors on the recall
-> reason and recommends continue. Confident. No sources. No escalation. And
-> critically: it had the exact same information our board gets. The difference is
-> never the data or the model — it's the cross-examination."
+> "Same signal, one pass. It may even reach the right call — but watch what it
+> does NOT produce: not one sourced claim, no independent re-derivation, no
+> escalation gate, no packet a human can sign. It had the exact same information
+> our board gets. The difference is not the answer — it's whether the reasoning is
+> independent, sourced, gated, and auditable."
 
 (Point out on screen: the naive output and the board get the *identical* intake
 signal. This is the integrity point — call it out.)

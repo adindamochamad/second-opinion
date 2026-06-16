@@ -20,11 +20,16 @@ The only variable between them is the independent second opinion — not the dat
 
 THE SCENARIOS
 -------------
-- amiodarone_warfarin (default): a low-looking Class II *subpotency* lot recall.
-  The headline says nothing about interactions. The real hazard is that
-  amiodarone is a potent CYP2C9/3A4 inhibitor that potentiates warfarin and
-  raises INR in the anticoagulated cardiology cohort -> major-bleed risk. Correct
-  outcome: ESCALATE. The board must *discover* warfarin, not be handed it.
+- clarithromycin_simvastatin (default): a low-looking Class II *superpotency*
+  (out-of-specification HIGH assay) lot recall. The headline says nothing about
+  interactions. The real hazard is that clarithromycin is a strong CYP3A4
+  inhibitor that is FDA-contraindicated with simvastatin/lovastatin; blocked
+  metabolism raises statin exposure -> myopathy / rhabdomyolysis in the
+  co-prescribed statin cohort. Superpotent lots make the inhibitor *stronger*, so
+  the directionality reinforces the hazard (more inhibitor -> more statin
+  accumulation). Correct outcome: ESCALATE. The board must *discover* that the
+  dangerous statins are the CYP3A4-dependent ones (simvastatin/lovastatin), not
+  be handed it.
 
 - benign_lot (control): a Class III label-typo recall of a topical with no
   meaningful interaction in the co-prescribed population. Correct outcome:
@@ -65,34 +70,39 @@ class Scenario:
         self.expected = expected  # the correct board outcome (for our own eval)
 
 
-# ── amiodarone / warfarin — the flagship hidden-interaction case ──────────────
-# Formulary context names the anticoagulation cohort but NOT warfarin and NOT the
-# interaction. The Verifier has to re-derive amiodarone -> CYP2C9/3A4 -> warfarin
-# potentiation -> INR rise from pharmacology + the live label, then connect it to
-# this cohort. That re-derivation is the catch the naive pass never makes.
-_AMIODARONE = Scenario(
-    key="amiodarone_warfarin",
-    drug="amiodarone",
+# ── clarithromycin / simvastatin — the flagship hidden-interaction case ───────
+# Formulary context names the co-prescribed *statin cohort* but NOT the specific
+# dangerous statin and NOT the interaction. The Verifier has to re-derive
+# clarithromycin -> strong CYP3A4 inhibition -> blocked simvastatin/lovastatin
+# metabolism -> myopathy/rhabdomyolysis (an FDA contraindication), then connect it
+# to this cohort. Directionality is bulletproof: a SUPERpotent lot means MORE
+# inhibitor, so the interaction is amplified, not reduced. That re-derivation is
+# the catch a one-line "low-impact lot recall" triage never makes.
+_CLARITHROMYCIN = Scenario(
+    key="clarithromycin_simvastatin",
+    drug="clarithromycin",
     formulary_context=(
-        "Formulary context from our hospital system: amiodarone is on the "
-        "cardiology formulary, and a large cohort of these cardiology patients is "
-        "co-managed by the anticoagulation clinic on chronic oral anticoagulation. "
-        "(The intake desk has not assessed any drug-drug interaction; this is a "
-        "lot-quality recall.)"
+        "Formulary context from our hospital system: clarithromycin is on the "
+        "formulary for respiratory infections and H. pylori regimens. A large share "
+        "of the patients receiving it are also on chronic statin therapy for "
+        "cardiovascular prevention. (The intake desk has not assessed any drug-drug "
+        "interaction; this was logged as a routine lot-quality recall.)"
     ),
     frozen_signal="""\
 INCOMING FDA SAFETY SIGNAL (illustrative fallback case)
 
-Drug: Amiodarone HCl 200 mg tablets
+Drug: Clarithromycin 500 mg tablets
 Source: FDA drug enforcement report (Class II)
-Recall reason: Subpotent / out-of-specification results in 3 distributed lots.
+Recall reason: Superpotent / out-of-specification HIGH assay results in 3
+  distributed lots (active content above the labeled 500 mg).
 Distribution: Multi-state, hospital and retail pharmacy.
 Status: Ongoing.
 
 Formulary context (from our hospital system):
-- Amiodarone is on the cardiology formulary.
-- A large cohort of these cardiology patients is co-managed by the
-  anticoagulation clinic on chronic oral anticoagulation.
+- Clarithromycin is on the formulary for respiratory infections and H. pylori
+  eradication.
+- A large share of these patients are also on chronic statin therapy for
+  cardiovascular prevention.
 - The intake desk has not assessed any drug-drug interaction; this was logged
   as a routine lot-quality recall.
 """,
@@ -155,8 +165,8 @@ Formulary context (from our hospital system):
 )
 
 
-SCENARIOS = {s.key: s for s in (_AMIODARONE, _BENIGN, _QT)}
-DEFAULT_CASE = "amiodarone_warfarin"
+SCENARIOS = {s.key: s for s in (_CLARITHROMYCIN, _BENIGN, _QT)}
+DEFAULT_CASE = "clarithromycin_simvastatin"
 
 
 def get_scenario(case: str | None = None) -> Scenario:

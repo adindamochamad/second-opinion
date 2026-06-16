@@ -680,11 +680,11 @@ function hydrateIcons(root){
 
 /* ── Per-scenario metadata ── */
 const SMETA = {
-  amiodarone_warfarin: {
+  clarithromycin_simvastatin: {
     icon:'pill', tag:'Hidden Drug Interaction', danger:true,
-    title:'Amiodarone — Hidden Warfarin Interaction',
-    drug:'Amiodarone 200mg (heart medication)',
-    desc:'A Class II recall for a manufacturing defect. The headline never mentions the life-threatening interaction with blood thinners — the AI board must discover it from pharmacology.',
+    title:'Clarithromycin — Hidden Statin Interaction',
+    drug:'Clarithromycin 500mg (antibiotic)',
+    desc:'A Class II superpotent-lot recall. The headline never mentions that clarithromycin is a strong CYP3A4 inhibitor FDA-contraindicated with simvastatin — the board must discover the rhabdomyolysis risk in the co-prescribed statin cohort.',
   },
   benign_lot: {
     icon:'package', tag:'Control Case', danger:false,

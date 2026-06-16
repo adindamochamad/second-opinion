@@ -69,7 +69,7 @@ SCENARIOS = [
 
 # Eval id -> DSR_CASE key for the scenarios that exist in board.case_data (Arm C).
 BOARD_CASE_MAP = {
-    "hidden_amiodarone_warfarin": "amiodarone_warfarin",
+    "hidden_clarithromycin_statin": "clarithromycin_simvastatin",
     "hidden_droperidol_qt": "qt_droperidol",
     "benign_carton_typo": "benign_lot",
 }

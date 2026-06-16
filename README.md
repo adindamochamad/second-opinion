@@ -14,13 +14,13 @@ Three specialist AI agents — on different frameworks — collaborate inside a 
 
 ## The question this solves
 
-> **In a multi-agent system, who catches the mistake when every agent trusts the last one's output?**
+> **In a high-stakes workflow, a capable model is often right — but who can prove it, catch it when it's wrong, and sign it off?**
 
-A single AI triaging an FDA recall reads the headline — *"subpotent lot, Class II, ongoing"* — and answers: *continue, low risk.* It sounds decisive. And it just missed that the recalled drug silently raises bleeding risk in the anticoagulated patients on the formulary — a major-bleed hazard the recall reason never mentions, because the recall was about a manufacturing defect, not the pharmacology. There was nobody in the room to say *"wait."*
+A single strong model can triage an FDA recall and reach the right call. What it does **not** do on its own is show its sources, get independently checked, escalate on a rule, and leave an audit trail a human can sign. In a regulated drug-safety workflow, "right, but unsourced and unchecked" is not acceptable — and a model that is confidently *wrong* has no one in the room to say *"wait."*
 
-The board is handed *the same intake signal the naive agent gets* — no warfarin spelled out, no interaction pre-computed. The Safety Verifier has to **discover** it.
+Second Opinion is **not** a bet that one model misses what three catch — our own evaluation shows a de-biased single agent detects these hazards too ([EVAL.md](EVAL.md)). It is a bet that **independent, enforced, source-grounded verification with a human gate** is what a regulated decision actually requires. The board makes every claim sourced, forces an independent challenger to re-derive the pharmacology, gates escalation on a verdict token *in code*, and hands a human an auditable packet — and when the lead is wrong, the challenger makes it correct itself on the record.
 
-**Second Opinion puts that someone in the room. Band is the room.**
+**Second Opinion puts that accountability in the room. Band is the room.**
 
 ---
 
@@ -87,13 +87,13 @@ python kickoff.py          # terminal 2 — post the FDA signal
 python demo.py             # terminal 3 — side-by-side output
 ```
 
-**Left (naive):** One agent, one pass — given **the exact same intake signal the board gets** (`naive_baseline.py` calls the same `build_incoming_signal`). It anchors on the recall reason and answers *"subpotent lot, low impact — continue."* Confident. No sources. No escalation. No mechanism to cross-examine itself.
+**Left (single pass):** One agent, one pass — given **the exact same intake signal the board gets** (`naive_baseline.py` calls the same `build_incoming_signal`). On these cases it usually reaches the right call — but as confident, **unsourced** prose: no per-claim citations, no independent check, no escalation gate, and no record of how it got there.
 
-**Right (the board):** The Safety Verifier independently re-derives amiodarone's CYP2C9/3A4 inhibition and warfarin potentiation, connects it to the anticoagulated cohort the headline never linked, pulls the live label + PubMed to source it, and the board escalates. The human receives a structured packet with every claim sourced. The only difference from the left is the second opinion — same data, same model class.
+**Right (the board):** The Clinical Reviewer drafts a **source-tagged** assessment; an **independent** Safety Verifier re-derives the pharmacology from scratch (clarithromycin → strong CYP3A4 inhibition → simvastatin/lovastatin accumulation → rhabdomyolysis), pulls the live label + PubMed to source it, and emits a verdict token. The Review Coordinator gates escalation on that token **in code**, and the human receives a structured **Decision Packet** with every claim sourced. The difference is not the answer — it is the **independence, the sourcing, the gate, and the audit trail**.
 
-> *"The naive agent had everything the board had — and still kept the hospital on a drug whose real hazard the headline hides. Watch what happens when one agent's job is to distrust the others, through Band."*
+> *"A capable model often gets the answer. In a regulated workflow that is not enough — you need it sourced, independently checked, gated, and on the record. That is what the board adds, through Band."* See [EVAL.md](EVAL.md) for the honest measurement.
 
-**The honesty test:** a review board that *always* escalates is just an alarm. Run the control case — `DSR_CASE=benign_lot` — a mislabeled-carton recall of a topical with no dangerous interaction. The same machinery re-derives, finds nothing, and correctly **stands down** (routine / continue). It escalates when it should, and only when it should. A third case, `DSR_CASE=qt_droperidol`, shows the pattern generalizes to a QT hazard, not just warfarin.
+**The honesty test:** a review board that *always* escalates is just an alarm. Run the control case — `DSR_CASE=benign_lot python orchestrator.py` — a mislabeled-carton recall of a topical with no dangerous interaction. The same machinery re-derives, finds nothing, correctly **stands down** (routine / continue), and the code-level branch **bypasses the Regulatory step** entirely. A third case, `DSR_CASE=qt_droperidol`, generalizes the pattern to a QT-stacking hazard.
 
 Set `DSR_LIVE=0` in `.env` for the deterministic frozen case (recommended for recording).
 
@@ -141,21 +141,21 @@ python setup_agents.py
 **Run:**
 
 ```bash
-# Terminal 1 — start all 3 agents (each in its own process)
+# One-time: register the non-LLM Review Coordinator (append-only; keeps your 3 agents)
+python register_coordinator.py
+
+# Terminal 1 — start the 3 specialist agents (each in its own process)
 python run_all.py
 
-# Terminal 2 — create the review room and post the FDA signal
-python kickoff.py
+# Terminal 2 — the Review Coordinator drives the supervised board to a verdict
+python orchestrator.py
 
-# Terminal 3 — watch the transcript as it builds
+# Terminal 3 — watch the transcript / side-by-side single-pass vs board
 python watch_room.py
+python demo.py
 
-# After the board finishes (~60–90 seconds):
-python demo.py   # side-by-side naive vs. board output
-
-# The honesty test — the board should NOT escalate this one:
-DSR_CASE=benign_lot python kickoff.py
-DSR_CASE=benign_lot python demo.py
+# The honesty test — the board STANDS DOWN and bypasses Regulatory in code:
+DSR_CASE=benign_lot python orchestrator.py
 ```
 
 Open the room at [app.band.ai](https://app.band.ai) to watch the agents deliberate live. `Ctrl+C` stops all.
