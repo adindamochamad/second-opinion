@@ -19,6 +19,7 @@ import asyncio
 import argparse
 import importlib
 import logging
+import os
 
 import yaml
 from dotenv import load_dotenv
@@ -61,6 +62,87 @@ async def _leave_existing_rooms(name: str, agent_id: str, client: AsyncRestClien
             logger.warning("  Could not leave room %s for %s: %s", room.id, name, e)
 
 
+async def run_kickoff(*, message: str | None = None, clean: bool = True, case: str | None = None) -> dict[str, str]:
+    """Create the review room, add the agents, post the FDA signal.
+
+    Returns a {room_name: room_id} map. Reusable from the CLI (main) and from the
+    web demo (web/app.py). ``case`` selects the scenario (DSR_CASE).
+    """
+    if case:
+        os.environ["DSR_CASE"] = case
+
+    config_file = credentials_path()
+    if not config_file.exists():
+        raise SystemExit(
+            f"{config_file.name} not found. Run 'python setup_agents.py' first."
+        )
+
+    with open(config_file) as f:
+        config = yaml.safe_load(f)
+
+    scenario_mod = importlib.import_module("board.scenario")
+    logger.info("Starting Second Opinion review session...")
+
+    # ── Resolve agent identities (Agent API) ────────────────────────────
+    agent_ids: dict[str, str] = {}
+    agent_names: dict[str, str] = {}
+    clients: dict[str, AsyncRestClient] = {}
+    for agent_def in scenario_mod.AGENTS:
+        key = agent_def["config_key"]
+        aid, name, client = await _get_agent_identity(config[key]["api_key"])
+        agent_ids[key] = aid
+        agent_names[key] = name
+        clients[key] = client
+        logger.info("%s: %s (%s)", key, name, aid)
+
+    # ── (optional) Leave old rooms so each run starts clean ─────────────
+    if clean:
+        logger.info("Cleaning up old rooms...")
+        for agent_def in scenario_mod.AGENTS:
+            key = agent_def["config_key"]
+            await _leave_existing_rooms(agent_names[key], agent_ids[key], clients[key])
+        logger.info("Cleanup complete.")
+
+    # ── Get kickoff config from scenario ────────────────────────────────
+    kickoff_config = scenario_mod.get_kickoff_config(agent_ids, agent_names)
+
+    # ── Create rooms (as the owner agent) and post the signal ───────────
+    room_ids: dict[str, str] = {}
+    for room_def in kickoff_config["rooms"]:
+        owner_key = room_def["owner"]
+        owner_client = clients[owner_key]
+
+        room = await owner_client.agent_api_chats.create_agent_chat(chat=ChatRoomRequest())
+        room_id = room.data.id
+        room_ids[room_def["name"]] = room_id
+        logger.info("Created %s room: %s (owner: %s)", room_def["name"], room_id, owner_key)
+
+        for participant_key in room_def["participants"]:
+            if participant_key == owner_key:
+                continue
+            await owner_client.agent_api_participants.add_agent_chat_participant(
+                room_id,
+                participant=ParticipantRequest(participant_id=agent_ids[participant_key]),
+            )
+            logger.info("  Added %s", participant_key)
+
+        msg = room_def["message"]
+        if message and room_def["name"] == "main":
+            mention_names = " ".join(f"@{agent_names[k]}" for k in room_def["mentions"])
+            msg = f"{mention_names} {message}"
+
+        mentions = [
+            Mention(id=agent_ids[k], name=agent_names[k]) for k in room_def["mentions"]
+        ]
+        await owner_client.agent_api_messages.create_agent_chat_message(
+            room_id,
+            message=ChatMessageRequest(content=msg, mentions=mentions),
+        )
+        logger.info("  Sent kickoff message to %s room", room_def["name"])
+
+    return room_ids
+
+
 async def main() -> None:
     load_dotenv()
 
@@ -72,80 +154,7 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    config_file = credentials_path()
-    if not config_file.exists():
-        logger.error(
-            "%s not found. Run 'python setup_agents.py' first.",
-            config_file.name,
-        )
-        raise SystemExit(1)
-
-    with open(config_file) as f:
-        config = yaml.safe_load(f)
-
-    scenario_mod = importlib.import_module("board.scenario")
-    logger.info("Starting Second Opinion review session...")
-
-    # ── Resolve agent identities (Agent API) ────────────────────────────
-    agent_ids = {}    # config_key -> agent_id
-    agent_names = {}  # config_key -> agent_name
-    clients = {}      # config_key -> AsyncRestClient
-    for agent_def in scenario_mod.AGENTS:
-        key = agent_def["config_key"]
-        aid, name, client = await _get_agent_identity(config[key]["api_key"])
-        agent_ids[key] = aid
-        agent_names[key] = name
-        clients[key] = client
-        logger.info("%s: %s (%s)", key, name, aid)
-
-    # ── (optional) Leave old rooms so each run starts clean ─────────────
-    if not args.no_clean:
-        logger.info("Cleaning up old rooms...")
-        for agent_def in scenario_mod.AGENTS:
-            key = agent_def["config_key"]
-            await _leave_existing_rooms(agent_names[key], agent_ids[key], clients[key])
-        logger.info("Cleanup complete.")
-
-    # ── Get kickoff config from scenario ────────────────────────────────
-    kickoff_config = scenario_mod.get_kickoff_config(agent_ids, agent_names)
-
-    # ── Create rooms (as the owner agent) and post the signal ───────────
-    room_ids = {}
-    for room_def in kickoff_config["rooms"]:
-        owner_key = room_def["owner"]
-        owner_client = clients[owner_key]
-
-        # Owner agent creates the room (it becomes the room owner/participant).
-        room = await owner_client.agent_api_chats.create_agent_chat(chat=ChatRoomRequest())
-        room_id = room.data.id
-        room_ids[room_def["name"]] = room_id
-        logger.info("Created %s room: %s (owner: %s)", room_def["name"], room_id, owner_key)
-
-        # Add the other agents (skip the owner — already in as creator).
-        for participant_key in room_def["participants"]:
-            if participant_key == owner_key:
-                continue
-            await owner_client.agent_api_participants.add_agent_chat_participant(
-                room_id,
-                participant=ParticipantRequest(participant_id=agent_ids[participant_key]),
-            )
-            logger.info("  Added %s", participant_key)
-
-        # Compose and send the kickoff message via the owner agent.
-        message = room_def["message"]
-        if args.message and room_def["name"] == "main":
-            mention_names = " ".join(f"@{agent_names[k]}" for k in room_def["mentions"])
-            message = f"{mention_names} {args.message}"
-
-        mentions = [
-            Mention(id=agent_ids[k], name=agent_names[k])
-            for k in room_def["mentions"]
-        ]
-        await owner_client.agent_api_messages.create_agent_chat_message(
-            room_id,
-            message=ChatMessageRequest(content=message, mentions=mentions),
-        )
-        logger.info("  Sent kickoff message to %s room", room_def["name"])
+    room_ids = await run_kickoff(message=args.message, clean=not args.no_clean)
 
     # ── Print room summary ──────────────────────────────────────────────
     print("\n" + "=" * 56)

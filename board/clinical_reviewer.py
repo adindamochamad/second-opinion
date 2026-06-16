@@ -13,7 +13,12 @@ from dotenv import load_dotenv
 
 from thenvoi import Agent
 
-from adapter_factory import create_adapter, load_credentials
+from adapter_factory import (
+    TUPLE_TOOL_FRAMEWORKS,
+    create_adapter,
+    load_credentials,
+    resolve_framework,
+)
 from platform_url import get_platform_url, get_ws_url
 from board.review_prompts import clinical_prompt
 from self_aware_preprocessor import SelfAwarePreprocessor
@@ -30,9 +35,12 @@ async def main() -> None:
     remove_tools("thenvoi_add_participant", "thenvoi_lookup_peers", "thenvoi_create_chatroom")
 
     agent_id, api_key = load_credentials("clinical_reviewer")
-    adapter = create_adapter(
-        "clinical_reviewer", clinical_prompt(), additional_tools=build_fda_tools()
-    )
+
+    tools = build_fda_tools()  # opt-in via USE_LIVE_TOOLS=1
+    if tools and resolve_framework("clinical_reviewer") not in TUPLE_TOOL_FRAMEWORKS:
+        logger.info("Live tools not attached on this framework; reasoning from model knowledge.")
+        tools = []
+    adapter = create_adapter("clinical_reviewer", clinical_prompt(), additional_tools=tools)
 
     agent = Agent.create(
         adapter=adapter,

@@ -20,15 +20,23 @@ gemini, google_adk.
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 import yaml
 
+logger = logging.getLogger("adapter_factory")
+
 ROOT_DIR = Path(__file__).resolve().parent
 BOARD_DIR = ROOT_DIR / "board"
 
-_RESERVED = ("framework", "model", "provider", "base_url", "api_key_env")
+# Frameworks whose adapters accept the portable CustomToolDef tuples returned by
+# tools.fda_tools.build_fda_tools. langgraph/pydantic_ai take native formats
+# (LangChain tools / bare callables) instead, so live tools are skipped there.
+TUPLE_TOOL_FRAMEWORKS = frozenset({"anthropic", "claude_sdk", "gemini", "google_adk"})
+
+_RESERVED = ("framework", "model", "provider", "base_url", "api_key_env", "fallback")
 
 
 def credentials_path() -> Path:
@@ -58,17 +66,47 @@ def _infer_provider(model: str) -> str:
     )
 
 
+def _load_config() -> dict:
+    with open(BOARD_DIR / "agents.yaml") as f:
+        return yaml.safe_load(f)
+
+
+def resolve_agent_cfg(agent_key: str, config: dict | None = None) -> dict:
+    """Return the *effective* config for an agent, applying its fallback.
+
+    An agent may declare an ``api_key_env`` plus a ``fallback:`` block. If the
+    required key is not present in the environment, we transparently switch to
+    the fallback so the demo always runs — e.g. the cross-provider Safety
+    Verifier (Groq) falls back to the local Claude SDK when GROQ_API_KEY is unset.
+    """
+    config = config or _load_config()
+    cfg = dict(config[agent_key])
+
+    key_env = cfg.get("api_key_env")
+    if key_env and not os.environ.get(key_env) and cfg.get("fallback"):
+        fb = dict(cfg["fallback"])
+        logger.warning(
+            "%s: %s not set — falling back to %s/%s (set %s for the cross-provider cast).",
+            agent_key, key_env, fb.get("framework"), fb.get("model"), key_env,
+        )
+        cfg = fb
+    cfg.pop("fallback", None)
+    return cfg
+
+
+def resolve_framework(agent_key: str) -> str:
+    """The effective framework for an agent after fallback resolution."""
+    return resolve_agent_cfg(agent_key)["framework"]
+
+
 def create_adapter(
     agent_key: str,
     custom_section: str,
     *,
     additional_tools: list | None = None,
 ):
-    config_path = BOARD_DIR / "agents.yaml"
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-
-    agent_cfg = config[agent_key]
+    config = _load_config()
+    agent_cfg = resolve_agent_cfg(agent_key, config)
     framework = agent_cfg["framework"]
     model = agent_cfg["model"]
     provider = agent_cfg.get("provider") or _infer_provider(model)

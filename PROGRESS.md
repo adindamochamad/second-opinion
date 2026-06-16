@@ -6,9 +6,31 @@
 
 ---
 
-## Status summary (2026-06-15)
+## Status summary (2026-06-15, evening — judge-feedback hardening pass)
 
-Demo is **recording-ready on the all-Claude config**. Cross-provider (Featherless/Qwen) config is written and commented in — blocked only on BOA26 credit redemption (see Blockers).
+Demo is **recording-ready**, and the cross-provider story is no longer blocked on
+BOA26: the default Verifier now runs **Groq / Llama 3.3 70B** (free tier, no card)
+via LangGraph, with an automatic fall-back to the Claude SDK when `GROQ_API_KEY`
+is unset — so it is genuinely cross-provider when a (free) key is present and
+still runs end-to-end on Claude alone otherwise. Featherless/Qwen remains a
+one-block swap for the partner prize.
+
+### Changes this pass (addressing critical-judge feedback)
+1. **Fair A/B.** `naive_baseline.py` now consumes the *same* `build_incoming_signal`
+   the board gets. The intake signal no longer spells out "warfarin / 410 patients"
+   — the Verifier must **discover** the interaction. Only variable left = the
+   second opinion.
+2. **Verifier actually sources its catch.** Live openFDA/PubMed tools are now
+   attached to the Safety Verifier too (framework-aware: skipped on langgraph,
+   which takes native tool formats), matching the README claim.
+3. **Multi-scenario registry** in `board/case_data.py`, selected by `DSR_CASE`:
+   `amiodarone_warfarin` (escalate), `benign_lot` (control — must NOT escalate),
+   `qt_droperidol` (generalization). Rebuts "single engineered scenario / always
+   escalates."
+4. **Real cross-provider default** + `fallback:` resolution in `adapter_factory.py`
+   (`resolve_agent_cfg` / `resolve_framework`). Fixed the false agents.yaml
+   comments that claimed cross-provider while running all-Claude.
+5. **`SUBMISSION.md`** — 5-min pitch script, deck outline, lablab checklist.
 
 ---
 

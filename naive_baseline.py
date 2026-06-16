@@ -1,13 +1,13 @@
-"""Naive single-agent baseline — the "before" half of the side-by-side demo.
+"""Naive single-agent baseline — compute-equalized "before" arm.
 
-One model, one pass, no independent verifier, no escalation path, no audit
-trail. It receives the recall headline the way a busy triage assistant would and
-returns a quick recommendation. This is what the review board is compared
-against: not a worse model, but the *absence of cross-examination*.
+Identical input to the board (build_incoming_signal). NEUTRAL instruction (no
+"be brief / one paragraph" handicap) and a token budget matched to the board's
+aggregate, so the only variable vs the board is ARCHITECTURE, not compute volume.
 
-Run:  python naive_baseline.py
-(Needs ANTHROPIC_API_KEY. Wording varies by run; the point is the missing
-second opinion, not a scripted answer.)
+Run:  python naive_baseline.py            # default case (amiodarone_warfarin)
+      DSR_CASE=benign_lot python naive_baseline.py
+(Needs ANTHROPIC_API_KEY. Wording varies by run; the point is the missing second
+opinion, not a scripted answer.)
 """
 from __future__ import annotations
 
@@ -16,24 +16,30 @@ import os
 import anthropic
 from dotenv import load_dotenv
 
-# The headline a single agent triages — limited-lot recall, looks low-impact.
-# (The review board additionally surfaces that amiodarone raises INR in
-# co-prescribed warfarin patients; this naive path has no one to surface that.)
-HEADLINE = """\
-FDA drug enforcement report: Amiodarone HCl 200 mg tablets, Class II recall.
-Reason: subpotent / out-of-specification results in 3 distributed lots.
-Status: ongoing. Distribution: multi-state hospital and retail pharmacy.
+from board.case_data import build_incoming_signal
 
-We have amiodarone on our cardiology formulary. Quick recommendation: do we need
-to take any action, or can we continue as normal?"""
-
-PROMPT = (
-    "You are a clinical triage assistant. Give a brief, decisive recommendation "
-    "in one short paragraph.\n\n" + HEADLINE
+# Neutral, professional framing — no nudge toward shallow/decisive answers.
+INSTRUCTION = (
+    "You are a clinical pharmacology reviewer. Analyze this incoming drug-safety / "
+    "regulatory signal for any potential drug-drug interactions or patient hazards in the "
+    "described population. Reason as carefully and thoroughly as the case warrants, then "
+    "give your assessment and a final recommendation."
 )
 
+# Match the board's aggregate output budget (~3 agents x ~1.3k tokens), so the
+# baseline is not starved of reasoning room. Override with BASELINE_MAX_TOKENS.
+NAIVE_MAX_TOKENS = int(os.environ.get("BASELINE_MAX_TOKENS", "4000"))
 
-def run_naive() -> str:
+
+def build_naive_prompt(case: str | None = None) -> str:
+    """The same intake signal the board sees, framed as a single neutral pass."""
+    # DSR_LIVE=0 -> frozen text (matches the board's frozen kickoff for recording).
+    live = os.environ.get("DSR_LIVE", "1") != "0"
+    signal = build_incoming_signal(case=case, live=live)
+    return f"{INSTRUCTION}\n\n{signal}"
+
+
+def run_naive(case: str | None = None) -> str:
     """Return the naive single agent's recommendation text (one model, one pass)."""
     load_dotenv()
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -42,15 +48,16 @@ def run_naive() -> str:
     client = anthropic.Anthropic()
     msg = client.messages.create(
         model=os.environ.get("BASELINE_MODEL", "claude-sonnet-4-5"),
-        max_tokens=500,
-        messages=[{"role": "user", "content": PROMPT}],
+        max_tokens=NAIVE_MAX_TOKENS,
+        messages=[{"role": "user", "content": build_naive_prompt(case)}],
     )
     return msg.content[0].text
 
 
 def main() -> None:
     print("=" * 64)
-    print("  NAIVE SINGLE AGENT — no second opinion, no escalation, no audit")
+    print("  NAIVE SINGLE AGENT — neutral instruction, compute-matched")
+    print("  (same intake signal the board receives)")
     print("=" * 64)
     print(run_naive())
     print("=" * 64)

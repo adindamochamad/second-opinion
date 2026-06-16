@@ -1,45 +1,60 @@
-# Framework + model per agent. Each agent runs in its own process and connects
+# Framework + model per agent. Each agent runs in its own OS process and connects
 # to the same Band room, so they can genuinely be different frameworks AND
-# different providers. That cross-provider independence is the point: the
-# Safety Verifier must NOT be the same brain as the Clinical Reviewer.
+# different providers. That cross-provider independence is the point: an
+# independent second opinion should not be the same brain — same vendor, same
+# weights, same blind spots — as the assessment it is checking.
 #
-# Default cast (cross-provider):
-#   Clinical Reviewer            -> Anthropic (Claude)        [ANTHROPIC_API_KEY]
-#   Safety Verifier              -> Featherless (open model)  [FEATHERLESS_API_KEY]
-#   Regulatory & Compliance      -> AI/ML API                 [AIMLAPI_KEY]
+# DEFAULT CAST (as written below):
+#   Clinical Reviewer        -> Anthropic API    (Claude Sonnet 4.5)   ANTHROPIC_API_KEY
+#   Safety Verifier          -> Groq (Llama 3.3 70B, OpenAI-compatible) GROQ_API_KEY
+#                               -> automatic fallback to Claude SDK if GROQ_API_KEY unset
+#   Regulatory & Compliance  -> Claude SDK       (Claude Sonnet 4.5)   no key (subscription)
 #
-# Any key beyond framework/model/provider/base_url/api_key_env is forwarded
-# straight to the adapter constructor (temperature, reasoning_effort, ...).
+# So out of the box you get a genuinely cross-provider board the moment a (free)
+# Groq key is present, and a board that still runs end-to-end on Claude alone if
+# it is not. Groq's free tier needs only a signup at console.groq.com — no card.
+#
+# Any key beyond framework/model/provider/base_url/api_key_env/fallback is
+# forwarded straight to the adapter/LLM (temperature, streaming, max_tokens, ...).
 #
 # ── Flip any agent to something you already have (one-line swaps) ──────────
 #   # Claude subscription (no API key):   framework: claude_sdk
-#   #                                     model: claude-sonnet-4-5-20250929
-#   # Codex subscription (run codex login): framework: codex
-#   #                                       model: gpt-5.4-mini
-#   # Plain OpenAI:                        framework: pydantic_ai
-#   #                                       model: gpt-5.4-mini   (needs OPENAI_API_KEY)
-#   # Local model (Ollama/vLLM):           framework: langgraph
-#   #                                       provider: openai
-#   #                                       model: llama3.1:8b
-#   #                                       base_url: http://localhost:11434/v1
-#   #                                       api_key_env: OPENAI_API_KEY
+#   #                                     model: claude-sonnet-4-5
+#   # Featherless (hackathon promo BOA26): provider: openai
+#   #                                      model: Qwen/Qwen2.5-72B-Instruct
+#   #                                      base_url: https://api.featherless.ai/v1
+#   #                                      api_key_env: FEATHERLESS_API_KEY
+#   # AI/ML API (hackathon partner):       provider: openai
+#   #                                      model: gpt-4o-mini
+#   #                                      base_url: https://api.aimlapi.com/v1
+#   #                                      api_key_env: AIMLAPI_KEY
+#   # Local model (Ollama/vLLM):           provider: openai
+#   #                                      model: llama3.1:8b
+#   #                                      base_url: http://localhost:11434/v1
 
 clinical_reviewer:
   framework: anthropic
   model: claude-sonnet-4-5
 
-# Independent challenger. Uses Groq (free tier, OpenAI-compatible) so the
-# Verifier runs on a genuinely different provider and model from Clinical Reviewer.
+# Independent challenger on a genuinely different provider + model family (Llama,
+# not Claude) so it does not share the Clinical Reviewer's training and blind
+# spots. streaming: false hardens long in-room contexts against truncated
+# generations on OpenAI-compatible providers. Falls back to the local Claude SDK
+# when GROQ_API_KEY is absent, so the demo always runs.
 safety_verifier:
-  framework: claude_sdk
-  model: claude-sonnet-4-5
+  framework: langgraph
+  provider: openai
+  model: llama-3.3-70b-versatile
+  base_url: https://api.groq.com/openai/v1
+  api_key_env: GROQ_API_KEY
+  streaming: false
+  temperature: 0
+  fallback:
+    framework: claude_sdk
+    model: claude-sonnet-4-5
 
-# Compliance gate runs on Claude for reliability and strict turn discipline (the
-# open-model langgraph path occasionally returned empty generations and looped
-# here). The AI/ML API hackathon coupon ($10 via lablab) arrived with no balance
-# (403 OutOfFundsException); restore that partner provider once funded by setting
-# framework: langgraph / provider: openai / model: gpt-4o-mini /
-# base_url: https://api.aimlapi.com/v1 / api_key_env: AIMLAPI_KEY.
+# Compliance gate on the Claude SDK (subscription, no API key) for strict turn
+# discipline — this is the relay's coordinator and benefits from reliability.
 regulatory_compliance:
-  framework: anthropic
+  framework: claude_sdk
   model: claude-sonnet-4-5

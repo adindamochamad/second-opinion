@@ -11,6 +11,9 @@ import os
 
 from board.case_data import build_incoming_signal
 
+COORDINATOR_KEY = "review_coordinator"
+COORDINATOR_NAME = "Review Coordinator"
+
 AGENTS = [
     {
         "config_key": "clinical_reviewer",
@@ -27,8 +30,15 @@ AGENTS = [
         "name": "Regulatory and Compliance Officer",
         "description": "Intake and final compliance-gate AI agent for FDA signal review.",
     },
+    {
+        "config_key": COORDINATOR_KEY,
+        "name": COORDINATOR_NAME,
+        "description": "Non-LLM supervisor that routes turns and enforces the review protocol.",
+    },
 ]
 
+# Only the three specialists run as LLM agent processes. The Review Coordinator is
+# a registered identity driven by orchestrator.py (REST only) — never started here.
 AGENT_MODULES = [
     "board.clinical_reviewer",
     "board.safety_verifier",

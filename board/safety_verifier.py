@@ -14,10 +14,16 @@ from dotenv import load_dotenv
 
 from thenvoi import Agent
 
-from adapter_factory import create_adapter, load_credentials
+from adapter_factory import (
+    TUPLE_TOOL_FRAMEWORKS,
+    create_adapter,
+    load_credentials,
+    resolve_framework,
+)
 from platform_url import get_platform_url, get_ws_url
 from board.review_prompts import verifier_prompt
 from self_aware_preprocessor import SelfAwarePreprocessor
+from tools.fda_tools import build_fda_tools
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("safety_verifier")
@@ -30,7 +36,16 @@ async def main() -> None:
     remove_tools("thenvoi_add_participant", "thenvoi_lookup_peers", "thenvoi_create_chatroom")
 
     agent_id, api_key = load_credentials("safety_verifier")
-    adapter = create_adapter("safety_verifier", verifier_prompt())
+
+    # The Verifier pulls live openFDA labels + PubMed to *source* its independent
+    # re-derivation (USE_LIVE_TOOLS=1). Tuple-format tools only attach on adapters
+    # that accept them; on a langgraph/Groq Verifier the re-derivation still runs
+    # from the model's own pharmacology knowledge, just without live citations.
+    tools = build_fda_tools()
+    if tools and resolve_framework("safety_verifier") not in TUPLE_TOOL_FRAMEWORKS:
+        logger.info("Live tools not attached on this framework; re-deriving from model knowledge.")
+        tools = []
+    adapter = create_adapter("safety_verifier", verifier_prompt(), additional_tools=tools)
 
     agent = Agent.create(
         adapter=adapter,
