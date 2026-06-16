@@ -38,11 +38,12 @@ THE SCENARIOS
 
 - qt_droperidol (generalization): a recall of an antiemetic carrying QT-
   prolongation risk in a peri-operative cohort already on other QT-prolonging
-  agents. A second hidden-interaction hazard on a *different* axis (QT, not INR)
-  to show the pattern is not warfarin-specific. Correct outcome: ESCALATE.
+  agents. A second hidden-interaction hazard on a *different* axis (QT, not the
+  CYP3A4/statin mechanism) to show the pattern is not flagship-specific. Correct
+  outcome: ESCALATE.
 
-Select with DSR_CASE (default amiodarone_warfarin). Set DSR_LIVE=0 for the frozen
-text (recommended for a recorded demo); DSR_LIVE=1 pulls the live openFDA recall.
+Select with DSR_CASE (default clarithromycin_simvastatin). Set DSR_LIVE=0 for the
+frozen text (recommended for a recorded demo); DSR_LIVE=1 pulls the live openFDA recall.
 """
 from __future__ import annotations
 

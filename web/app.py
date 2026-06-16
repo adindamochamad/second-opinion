@@ -505,25 +505,25 @@ footer a:hover{color:var(--text);}
       <div class="hero-top">
         <div class="hero-icon-wrap"><span class="ic" data-ic="stethoscope" data-sz="26"></span></div>
         <div>
-          <div class="hero-hl">What happens when one AI gets it wrong and nobody checks?</div>
-          <div class="hero-desc">Second Opinion puts three specialist AI agents in a room together. One assesses the drug risk. An independent AI challenger must re-derive the pharmacology from scratch and try to break the recommendation. A regulatory agent reads the compliance rules. Only then does anything reach a human.</div>
+          <div class="hero-hl">A capable AI is often right — but who sourced it, checked it, and signed it off?</div>
+          <div class="hero-desc">Second Opinion puts three specialist AI agents in a Band room, driven by a non-LLM Review Coordinator. One drafts a source-tagged assessment. An independent challenger must re-derive the pharmacology from scratch and emit a verdict. A regulatory agent reads the compliance rules. Only then does a sourced, auditable packet reach a human.</div>
         </div>
       </div>
       <div class="hero-cols">
         <div class="hcol">
           <div class="hcol-icon" style="color:var(--red)"><span class="ic" data-ic="alert-triangle" data-sz="22"></span></div>
           <div class="hcol-t">The Gap</div>
-          <div class="hcol-b">A single AI reads an FDA recall headline — "subpotent lot, low risk" — and says <em>continue</em>. It just missed that this heart drug silently raises bleeding risk in blood-thinner patients. The recall never mentions it.</div>
+          <div class="hcol-b">A single AI can even reach the right call on an FDA recall — but it answers in one unsourced paragraph: no independent check, no escalation gate, no audit trail, and nobody to catch it when it's <em>wrong</em>.</div>
         </div>
         <div class="hcol">
           <div class="hcol-icon" style="color:var(--blue)"><span class="ic" data-ic="flask" data-sz="22"></span></div>
           <div class="hcol-t">The Board</div>
-          <div class="hcol-b">Three agents on Band: Clinical Reviewer drafts an assessment. Safety Verifier independently re-derives the pharmacology — it <em>cannot</em> echo the lead. Regulatory adds compliance context. Human reads the final packet.</div>
+          <div class="hcol-b">A Review Coordinator routes every turn on Band: Clinical drafts a source-tagged assessment; an independent Safety Verifier re-derives the pharmacology and emits a verdict — it <em>cannot</em> echo the lead; the Coordinator branches in code; a human reads the final packet.</div>
         </div>
         <div class="hcol">
           <div class="hcol-icon" style="color:var(--green)"><span class="ic" data-ic="check-circle" data-sz="22"></span></div>
           <div class="hcol-t">The Proof</div>
-          <div class="hcol-b">Both naive AI and the board get <em>identical input</em>. Naive says continue. The board catches the hidden interaction, sources every claim, and escalates. Pick a scenario below and watch it happen live.</div>
+          <div class="hcol-b">Both the single AI and the board get <em>identical input</em> — and often reach the same call. The difference: the board's answer is independently re-derived, every claim sourced, escalation gated, and handed over as an auditable packet. Pick a scenario and watch it live.</div>
         </div>
       </div>
     </div>

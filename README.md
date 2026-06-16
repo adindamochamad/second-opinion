@@ -83,12 +83,12 @@ The production cast runs **all-Claude** for a reliable demo. Independence is sti
 
 ---
 
-## The demo: naive agent vs. the review board
+## The demo: single pass vs. the review board
 
 ```
-python run_all.py          # terminal 1 — start the 3 agents
-python kickoff.py          # terminal 2 — post the FDA signal
-python demo.py             # terminal 3 — side-by-side output
+python run_all.py          # terminal 1 — start the 3 specialist agents
+python orchestrator.py     # terminal 2 — the Review Coordinator drives the board
+python demo.py             # terminal 3 — side-by-side single-pass vs board
 ```
 
 **Left (single pass):** One agent, one pass — given **the exact same intake signal the board gets** (`naive_baseline.py` calls the same `build_incoming_signal`). On these cases it usually reaches the right call — but as confident, **unsourced** prose: no per-claim citations, no independent check, no escalation gate, and no record of how it got there.
@@ -185,11 +185,12 @@ review runs at a time — this is a demo surface, not a multi-tenant service.
 > burns a large slice of that — enough that a public URL with repeated clicks
 > will hit a 429 fast. For an always-on hosted demo, run it on the all-Claude
 > fallback (**don't set `GROQ_API_KEY` on the server** → the Verifier falls back
-> to the Claude SDK, no daily cap). Keep the genuine cross-provider cast (Groq
-> Llama) for the recorded proof take, ideally on a fresh daily budget or the
-> Groq Dev tier. Verified end-to-end on 2026-06-15: cross-provider run completed,
-> the board discovered the warfarin interaction the signal never named, and
-> escalated.
+> to the Claude SDK, no daily cap). Keep the cross-provider cast (Groq Llama) for a
+> short recorded take only — the free tier rate-limits the multi-turn board (429 on
+> the larger re-verify turn). Verified end-to-end on the all-Claude default: the
+> Coordinator drove the board, the Verifier independently re-derived the
+> clarithromycin → CYP3A4 → statin interaction the signal never named, and the
+> board escalated; the benign control stood down and bypassed Regulatory in code.
 
 **Tear down:**
 
