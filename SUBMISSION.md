@@ -39,13 +39,13 @@ context, role specialization, task state, coordination — and a clear demo.
 
 | Criterion | Where it shows |
 |---|---|
-| Task handoffs | `@mention`-routed relay: Regulatory → Clinical → Verifier → Regulatory → Clinical → Human, each a real Band message |
-| Shared context | Band keeps the room thread in sync; each agent acts only on turns addressed to it (filtered delivery) |
-| Role specialization | Three distinct system roles + an independent challenger that cannot echo the lead |
-| Coordination / state | A verdict token (`CHALLENGE` / `CONCUR-AND-ESCALATE`) drives the compliance gate's ROUTINE-vs-ESCALATE branch; the benign case takes the other branch |
-| Cross-framework | Anthropic API + Claude SDK + (default) Groq/Llama via LangGraph share one room — different runtimes, one Band |
+| Task handoffs | A non-LLM Review Coordinator routes every turn over Band: intake → Clinical → Verifier → (challenge loop) → Regulatory → Clinical → Human. Each hop is a real Band message; specialists address only the Coordinator |
+| Shared context | Band delivers each agent only the turns that mention it; the Coordinator carries each agent's output forward, keeping the room one synced thread (filtered delivery + explicit broker) |
+| Role specialization | Three distinct specialist roles + a non-LLM supervisor + an independent challenger that cannot echo the lead |
+| Coordination / state | A `[VERDICT: …]` token drives a real CODE branch: ROUTINE bypasses Regulatory; ESCALATE compiles the packet; CHALLENGE runs a capped revise/re-verify loop. The benign control takes the ROUTINE branch |
+| Cross-framework | Anthropic API + Claude SDK by default (all-Claude, reliable); a one-line YAML swap puts the Verifier on Groq/Llama via LangGraph — different runtimes, one Band room |
 | Human-in-the-loop | The human is the room's escalation target; the Decision Packet is a visible message, not a webhook |
-| Clear demonstration | Side-by-side naive-vs-board on *identical input*, plus a control case that does NOT escalate |
+| Clear demonstration | Side-by-side single-pass-vs-board on *identical input*, plus a control case that does NOT escalate (and bypasses Regulatory in code) |
 
 ---
 
@@ -72,17 +72,23 @@ Use a human voice. Show the terminal and the Band web UI. Times are cumulative.
 signal. This is the integrity point — call it out.)
 
 **[1:10–2:30] The board on Band — switch to the Band web UI room.**
-> "Now the same signal goes into a Band room with three agents in three separate
-> processes. Regulatory does intake and `@mentions` the Clinical Reviewer.
-> Clinical drafts an assessment with source labels and confidence tags, then is
-> *required* to hand off to the Safety Verifier — it cannot finalize alone."
+> "Now the same signal goes into a Band room. A non-LLM Review Coordinator runs
+> intake and routes every single turn. It `@mentions` the Clinical Reviewer, who
+> drafts an assessment with a source label and a confidence tag on every claim,
+> then reports back to the Coordinator — it cannot finalize alone. The Coordinator
+> forwards that assessment to an independent Safety Verifier."
 
-> "Here's the part that matters. The Verifier runs on a different model from a
-> different provider — Llama on Groq, not Claude — so it doesn't share the lead's
-> blind spots. And it's structurally forbidden from rubber-stamping: it has to
-> post its own pharmacology re-derivation first. Watch it surface the interaction
-> the headline never mentioned, pull the live FDA label and PubMed to source it,
-> and escalate."
+> "Here's the part that matters. The Verifier is structurally forbidden from
+> rubber-stamping — it has to post its own pharmacology re-derivation first and
+> emit a verdict token. Watch it surface the interaction the headline never
+> mentioned — clarithromycin's CYP3A4 inhibition driving statin rhabdomyolysis —
+> pull the live FDA label and PubMed to source it, and escalate. The Coordinator
+> parses that token and branches the workflow *in code*."
+
+> "And independence is native to the design: the challenger runs all-Claude here
+> for a rock-solid recording, but flipping it to a different framework *and*
+> provider — Llama 3.3 70B on Groq — is a single block of YAML. Same room, same
+> protocol; only the brain behind the challenger changes."
 
 (Show the `thought` events tab — the private reasoning channel — to prove the
 audit trail is complete while the transcript stays clean.)
@@ -119,14 +125,14 @@ audit trail is complete while the transcript stays clean.)
 
 ## 4. Slide deck outline (8 slides, PDF)
 
-1. **Title** — Second Opinion · independent challenger drug-safety board on Band · Track 3.
-2. **The failure mode** — "Who catches the mistake when every agent trusts the last one's output?" One stat-style line: naive pass → "continue" → missed bleed risk.
-3. **The idea** — put an independent challenger in the room; it must re-derive, not echo.
-4. **Architecture** — the 3-agent relay diagram; label every Band primitive used.
-5. **The catch (hazard case)** — naive vs board on identical input; the Verifier's re-derivation + sources; ESCALATE.
-6. **The honesty test (control case)** — benign recall → board stands down → not an alarm.
-7. **Cross-provider by design** — Claude clinician + Llama/Groq verifier in one Band room; one-line swaps; partner providers (Featherless/AI-ML API) drop in.
-8. **Why Band / what's next** — Band as the coordination layer; roadmap (more case classes, eval harness, EHR formulary feed).
+1. **Title** — Second Opinion · independent-challenger drug-safety board on Band · Track 3.
+2. **The gap** — a capable model is often right, but its answer is unsourced, unchecked, and unauditable. In a regulated workflow, "right but unaccountable" fails. (Be honest: this is a governance gap, not a detection gap — see slide 6.)
+3. **The idea** — put an independent challenger + a supervisor in the room; every claim sourced, every escalation gated, every step on the record.
+4. **Architecture** — the Review Coordinator (non-LLM supervisor) routing the 3 specialists; label every Band primitive; show the code-level CHALLENGE loop and ROUTINE-vs-ESCALATE branch.
+5. **The catch (hazard case)** — single pass vs board on identical input: similar answer, but the board adds an independent re-derivation (clarithromycin → CYP3A4 → statin rhabdomyolysis), per-claim sources, a verdict-gated escalation, and an auditable packet.
+6. **The honest eval** — our ablation: a de-biased single agent detects these hazards too; the board wins on enforced sourcing, self-correction, and audit trail — not raw accuracy. (Show the EVAL.md table; owning this builds trust.)
+7. **The honesty test (control case)** — benign recall → board stands down → bypasses Regulatory in code → not an alarm.
+8. **Cross-provider capability (one-line toggle) + Why Band / next** — all-Claude by default for reliability; flip one YAML block to run the challenger on Llama/Groq (Featherless / AI-ML API drop in); Band as the coordination layer; roadmap (more case classes, citation validation, EHR formulary feed).
 
 ---
 
@@ -153,16 +159,20 @@ audit trail is complete while the transcript stays clean.)
 ## 6. Run order (for the recording)
 
 ```bash
+# One-time: register the non-LLM Review Coordinator (append-only; keeps your 3 agents)
+python register_coordinator.py
+
 # Hazard case (default) — the catch
-python run_all.py                 # 3 agents, each its own process
-python kickoff.py                 # post the FDA signal (DSR_LIVE=0 frozen for recording)
-python demo.py                    # side-by-side naive vs board (identical input)
+python run_all.py                 # 3 specialist agents, each its own process
+python orchestrator.py            # the Coordinator drives the board (DSR_LIVE=0 frozen for recording)
+python demo.py                    # side-by-side single-pass vs board (identical input)
 python watch_room.py              # full transcript with resolved @mentions
 
-# Honesty test — the board should NOT escalate
-DSR_CASE=benign_lot python kickoff.py
-DSR_CASE=benign_lot python demo.py
+# Honesty test — the board STANDS DOWN and bypasses Regulatory in code
+DSR_CASE=benign_lot python orchestrator.py
 ```
 
-Set `GROQ_API_KEY` (free, console.groq.com) before `run_all.py` for the genuine
-cross-provider take; leave it unset to run all-Claude (auto-fallback).
+The default cast is **all-Claude** (reliable for recording). For one genuine
+cross-provider take, flip the toggle in `board/agents.yaml` (Verifier → Groq/Llama)
+and set `GROQ_API_KEY` — but record it as a short take; the Groq free tier
+rate-limits multi-turn board runs.

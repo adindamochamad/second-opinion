@@ -4,15 +4,17 @@
 # independent second opinion should not be the same brain — same vendor, same
 # weights, same blind spots — as the assessment it is checking.
 #
-# DEFAULT CAST (as written below):
+# DEFAULT CAST (as written below) — all-Claude for a reliable demo:
 #   Clinical Reviewer        -> Anthropic API    (Claude Sonnet 4.5)   ANTHROPIC_API_KEY
-#   Safety Verifier          -> Groq (Llama 3.3 70B, OpenAI-compatible) GROQ_API_KEY
-#                               -> automatic fallback to Claude SDK if GROQ_API_KEY unset
-#   Regulatory & Compliance  -> Claude SDK       (Claude Sonnet 4.5)   no key (subscription)
+#   Safety Verifier          -> Claude SDK        (Claude Sonnet 4.5)   no key (subscription)
+#   Regulatory & Compliance  -> Claude SDK        (Claude Sonnet 4.5)   no key (subscription)
 #
-# So out of the box you get a genuinely cross-provider board the moment a (free)
-# Groq key is present, and a board that still runs end-to-end on Claude alone if
-# it is not. Groq's free tier needs only a signup at console.groq.com — no card.
+# The Safety Verifier is an INDEPENDENT challenger by construction (its own process,
+# its own room turn, structurally forbidden from rubber-stamping) regardless of
+# provider. To make it cross-provider too — a different framework AND a different set
+# of weights/blind spots — flip the one-line toggle in the safety_verifier block below
+# (Llama 3.3 70B via LangGraph/Groq). That swap is the cross-provider story; the
+# all-Claude default is the reliable-recording story.
 #
 # Any key beyond framework/model/provider/base_url/api_key_env/fallback is
 # forwarded straight to the adapter/LLM (temperature, streaming, max_tokens, ...).
@@ -36,22 +38,31 @@ clinical_reviewer:
   framework: anthropic
   model: claude-sonnet-4-5
 
-# Independent challenger on a genuinely different provider + model family (Llama,
-# not Claude) so it does not share the Clinical Reviewer's training and blind
-# spots. streaming: false hardens long in-room contexts against truncated
-# generations on OpenAI-compatible providers. Falls back to the local Claude SDK
-# when GROQ_API_KEY is absent, so the demo always runs.
+# DEFAULT (production / recording): all-Claude for reliability. The Safety Verifier
+# is still a genuinely INDEPENDENT challenger (separate process, separate room turn,
+# structurally forbidden from rubber-stamping) — it just runs the same provider here
+# so a public demo cannot stall. Cross-provider independence is one swap away below.
 safety_verifier:
-  framework: langgraph
-  provider: openai
-  model: llama-3.3-70b-versatile
-  base_url: https://api.groq.com/openai/v1
-  api_key_env: GROQ_API_KEY
-  streaming: false
-  temperature: 0
-  fallback:
-    framework: claude_sdk
-    model: claude-sonnet-4-5
+  framework: claude_sdk
+  model: claude-sonnet-4-5
+
+# CROSS-PROVIDER TOGGLE (one-line swap): comment the block above and uncomment this
+# to run the challenger on a different framework AND provider — Llama 3.3 70B via
+# LangGraph/Groq — so it shares none of the lead's weights or blind spots. Auto-falls
+# back to claude_sdk if GROQ_API_KEY is unset.
+# WARNING: the Groq free tier rate-limits multi-turn board runs (429 on the larger
+# re-verify turn). Use it for a short recorded take, not a live public demo.
+# safety_verifier:
+#   framework: langgraph
+#   provider: openai
+#   model: llama-3.3-70b-versatile
+#   base_url: https://api.groq.com/openai/v1
+#   api_key_env: GROQ_API_KEY
+#   streaming: false
+#   temperature: 0
+#   fallback:
+#     framework: claude_sdk
+#     model: claude-sonnet-4-5
 
 # Compliance gate on the Claude SDK (subscription, no API key) for strict turn
 # discipline — this is the relay's coordinator and benefits from reliability.

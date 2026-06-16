@@ -26,29 +26,31 @@ Second Opinion is **not** a bet that one model misses what three catch — our o
 
 ## How it works
 
-An FDA safety signal arrives. Three agents collaborate **through Band** to turn it into an auditable, human-ready recommendation:
+An FDA safety signal arrives. A non-LLM **Review Coordinator** runs intake and routes **every** turn through Band; the three specialist agents only ever address the Coordinator, which parses their verdict tokens and branches the workflow **in code**:
 
 ```
-Regulatory & Compliance          ← posts the FDA signal, runs compliance gate
-        │  @Clinical Reviewer
-        ▼
-Clinical Reviewer                ← hazard assessment + draft recommendation
-        │  @Safety Verifier
-        ▼
-Safety Verifier                  ← independent re-derivation (different framework)
-        │  CONCUR-AND-ESCALATE / CHALLENGE
-        │  @Regulatory & Compliance
-        ▼
-Regulatory & Compliance          ← compliance read + ESCALATE / ROUTINE decision
-        │  @Clinical Reviewer
-        ▼
-Clinical Reviewer                ← DECISION PACKET FOR HUMAN REVIEWER
+                       ┌──────────────────────────────┐
+                       │       Review Coordinator      │  runs intake (posts the signal),
+                       │  (non-LLM supervisor, REST)   │  routes every turn, parses
+                       └──────────────────────────────┘  [VERDICT:…], branches in code
+   posts signal → @Clinical          specialists address ONLY the Coordinator
         │
         ▼
-   👤 Human (watches the room, makes the final call)
+  1. Clinical Reviewer  ── source-tagged assessment ──► (back to Coordinator)
+        │
+        ▼  Coordinator forwards the assessment to the challenger
+  2. Safety Verifier   ── independent re-derivation + one [VERDICT] ──► (back to Coordinator)
+        │
+        ├─ [VERDICT: CHALLENGE] → Coordinator routes back to Clinical →
+        │     [REVISED ASSESSMENT] → Verifier re-verifies   (loop capped at 1 round)
+        │
+        ├─ [VERDICT: ESCALATE] → 3. Regulatory (compliance read) → 4. Clinical →
+        │     DECISION PACKET FOR HUMAN REVIEWER → 👤 Human (signs off)
+        │
+        └─ [VERDICT: ROUTINE]  → Clinical posts ROUTINE CLOSURE   (Regulatory BYPASSED in code)
 ```
 
-Every claim carries a **source label** (`FDA-LABEL`, `FDA-RECALL`, `PUBMED:<topic>`, `FORMULARY`) and a **confidence tag** (`high / medium / low`). The Safety Verifier is *required* to visibly re-derive the pharmacology from first principles — it cannot just echo the Clinical Reviewer's conclusion. If it finds an unverified or unsafe claim, it emits `CHALLENGE`. If it agrees but the risk is serious, it emits `CONCUR-AND-ESCALATE`. Either verdict lands in the final decision packet the human reads.
+Every claim carries a **source label** (`FDA-LABEL`, `FDA-RECALL`, `PUBMED:<topic>`, `FORMULARY`) and a **confidence tag** (`high / medium / low`). The Safety Verifier is *required* to visibly re-derive the pharmacology from first principles — it cannot echo the lead — and emit exactly one verdict token. The Coordinator parses that token and branches **in code**: `[VERDICT: CHALLENGE]` routes back to the Clinical Reviewer for a `[REVISED ASSESSMENT]` and one re-verification round; `[VERDICT: ESCALATE]` pulls in Regulatory and compiles the human Decision Packet; `[VERDICT: ROUTINE]` posts a closure and **bypasses Regulatory entirely**. Because Band delivers each agent only the turns that mention it, the Coordinator forwards the prior agent's content into each routing message — it is the explicit shared-context broker, so the Verifier actually sees the assessment it must check.
 
 ---
 
@@ -58,12 +60,13 @@ This is built for the hackathon's first judging criterion. Every Band primitive 
 
 | Band feature | Where it shows up |
 |---|---|
-| **Separate agent processes** | `run_all.py` spawns each agent in its own OS process — 3 genuinely independent runtimes, each with its own event loop, memory, and provider connection. Not 3 function calls in one script. |
-| **One shared room + `@mention` routing** | Agents address each other by `@Name`. Each agent only acts on turns that mention it — Band delivers the filtered context, the agent never sees turns it was not part of. |
-| **Private events channel** | Every internal reasoning step goes to `thenvoi_send_event(message_type="thought")` — visible in the Band UI events tab, invisible to peer agents. The room transcript stays clean while the audit trail is complete. |
+| **Separate agent processes** | `run_all.py` spawns each specialist in its own OS process — independent runtimes, each with its own event loop, memory, and provider connection. Not function calls in one script. |
+| **Supervisor routing (the Coordinator owns control flow)** | A non-LLM **Review Coordinator** runs intake and routes **every** turn. Specialists never `@mention` each other — they emit a verdict token and address the Coordinator, which parses it and decides the next hop. Routing is a code-level mechanism in `orchestrator.py`, not prose the agents are trusted to follow. |
+| **Shared context via the Coordinator** | Band delivers each agent only the turns that mention it, so the Coordinator carries each agent's output forward into the next routing message — the room stays a single synced thread, and the Verifier actually sees the assessment it must check. |
+| **Private events channel** | Every internal reasoning step goes to `thenvoi_send_event(message_type="thought")` — visible in the Band UI events tab, invisible to peers. The room transcript stays clean while the audit trail is complete. |
 | **Human-in-the-room** | The human reviewer is the room's escalation target. The final Decision Packet is a visible message addressed to the human, not a webhook or a side-channel. |
-| **Cross-framework + cross-provider agents** | Clinical Reviewer runs the `anthropic` adapter (Claude); the Safety Verifier runs LangGraph on **Groq/Llama** by default — a different framework *and* a different provider, so the challenger does not share the lead's weights or blind spots. Regulatory runs the `claude_sdk` adapter. Three runtimes, one Band room. No Groq key? The Verifier auto-falls-back to the Claude SDK so the demo always runs. |
-| **Task handoff with shared context** | Intake → assessment → challenge → compliance → decision packet. Each handoff is a `@mention`-routed message; Band keeps the conversation context in sync so each agent has the full thread. |
+| **Code-gated task state** | The Coordinator parses `[VERDICT: …]` and branches: `ROUTINE` bypasses Regulatory; `ESCALATE` compiles the packet; `CHALLENGE` runs a capped revise/re-verify loop. The verdict token *is* the task state, and it changes the control flow. |
+| **Cross-framework + cross-provider (toggle)** | Each agent's framework/model/provider is one block in `board/agents.yaml`. The default production cast runs **all-Claude** for reliability; flipping the Verifier to Groq/Llama via LangGraph — a different framework *and* provider — is a one-line swap, with automatic fallback to the Claude SDK. |
 
 ---
 
@@ -71,11 +74,12 @@ This is built for the hackathon's first judging criterion. Every Band primitive 
 
 | Agent | Framework | Model | Role |
 |---|---|---|---|
-| **Clinical Reviewer** | `anthropic` | claude-sonnet-4-5 | Lead assessor. Reads the FDA signal, drafts the patient-safety assessment with source + confidence tags, then hands off to the Verifier. Attaches live openFDA and PubMed tools. |
-| **Safety Verifier** | `langgraph` → **Groq/Llama 3.3 70B** *(fallback `claude_sdk`)* | llama-3.3-70b-versatile | Independent second opinion on a **different provider and model family**. *Must* visibly re-derive the pharmacology, pull the live label/PubMed to source it, and declare `CHALLENGE` / `CONCUR-AND-ESCALATE` / stand down. Cannot rubber-stamp. |
-| **Regulatory & Compliance Officer** | `claude_sdk` | claude-sonnet-4-5 | Intake desk and compliance gate. Posts the FDA signal, runs the regulatory read (21 CFR 314.80), decides ESCALATE vs ROUTINE, and requests the final decision packet. |
+| **Review Coordinator** | REST (non-LLM) | — | Supervisor. Runs intake (posts the FDA signal), routes **every** turn, parses `[VERDICT: …]` tokens, runs the capped challenge loop, and branches ROUTINE vs ESCALATE in code. It never reasons — it orchestrates. |
+| **Clinical Reviewer** | `anthropic` | claude-sonnet-4-5 | Lead assessor. Drafts the source- + confidence-tagged assessment; on a challenge posts a `[REVISED ASSESSMENT]`; compiles the final Decision Packet. Addresses only the Coordinator. Attaches live openFDA + PubMed tools. |
+| **Safety Verifier** | `claude_sdk` *(default)* · `langgraph`→Groq/Llama *(toggle)* | claude-sonnet-4-5 *(default)* / llama-3.3-70b-versatile | Independent second opinion. *Must* visibly re-derive the pharmacology, source it, and emit exactly one `[VERDICT: CHALLENGE \| ESCALATE \| ROUTINE]`. Cannot rubber-stamp. Addresses only the Coordinator. |
+| **Regulatory & Compliance Officer** | `claude_sdk` | claude-sonnet-4-5 | Compliance gate, pulled in **only on the ESCALATE branch**. Runs the regulatory read (21 CFR 314.80) and returns it to the Coordinator. |
 
-The Verifier deliberately runs on a **different provider** from the Clinical Reviewer: an independent challenge should not come from the same weights and the same blind spots. Groq's free tier (no card) makes this cross-provider board the default; if `GROQ_API_KEY` is unset it falls back to the Claude SDK automatically. One block in `board/agents.yaml` swaps the Verifier to Featherless, AI/ML API, PydanticAI, Codex, or any OpenAI-compatible endpoint.
+The production cast runs **all-Claude** for a reliable demo. Independence is still native: an independent challenge should not come from the same weights and blind spots, so flipping the Verifier to a **different framework and provider** — Llama 3.3 70B via LangGraph/Groq, or Featherless, AI/ML API, PydanticAI, Codex, or any OpenAI-compatible endpoint — is a single block in `board/agents.yaml`, with automatic fallback to the Claude SDK. (Note: the Groq free tier rate-limits multi-turn board runs, so use it for a short recorded take, not a live public demo.)
 
 ---
 
